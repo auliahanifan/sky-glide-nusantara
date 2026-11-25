@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1cb5e0"/>
+      <stop offset="65%" stop-color="#60d5f7"/>
+      <stop offset="100%" stop-color="#dff6ff"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff4b0"/>
+      <stop offset="50%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#c97a3e"/>
+      <stop offset="50%" stop-color="#e49b57"/>
+      <stop offset="100%" stop-color="#b4632b"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="url(#sky)"/>
+  <circle cx="152" cy="40" r="22" fill="#fde68a" opacity="0.8"/>
+  <path d="M20 156 Q48 134 80 144 Q112 126 144 140 Q170 132 192 152 L192 192 L0 192 Z" fill="#ffffff" opacity="0.9"/>
+  <circle cx="96" cy="84" r="46" fill="none" stroke="url(#gold)" stroke-width="14"/>
+  <circle cx="96" cy="84" r="46" fill="none" stroke="#fffbeb" stroke-width="3" opacity="0.65"/>
+  <!-- Stylized Glider Wing & Brass Thrusters -->
+  <path d="M40 104 L96 86 L152 104 L144 118 L96 105 L48 118 Z" fill="url(#wood)" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="81" y="76" width="12" height="28" rx="5" fill="#fbbf24" stroke="#92400e" stroke-width="2"/>
+  <rect x="99" y="76" width="12" height="28" rx="5" fill="#fbbf24" stroke="#92400e" stroke-width="2"/>
+  <circle cx="96" cy="70" r="13" fill="#8b4513" stroke="#5a2d0c" stroke-width="2"/>
+  <path d="M96 82 Q122 82 132 72 Q122 92 98 92 Z" fill="#ef4444"/>
+  <ellipse cx="87" cy="112" rx="5" ry="10" fill="#fef08a"/>
+  <ellipse cx="105" cy="112" rx="5" ry="10" fill="#fef08a"/>
+</svg>
