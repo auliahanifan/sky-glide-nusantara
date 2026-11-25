@@ -4,9 +4,11 @@ import type { AviatorId, WingId } from '../types/game';
 import {
   buildMythicalHaloGroup,
   createBillowingSailGeo,
+  createCapeSegmentGeo,
   createFeatherGeo,
   createFlamePetalGeo,
   createPhinisiHullGeo,
+  createSaddleBaseGeo,
   createTaperedLoftGeo
 } from './MountGeometry';
 import type { ProceduralTexturePack } from './ProceduralTextures';
@@ -40,7 +42,9 @@ interface AnimRig {
   legPivots: THREE.Object3D[];
   propellers: THREE.Object3D[];
   sailMeshes: THREE.Object3D[];
-  riderScarfSegments: THREE.Object3D[];
+  riderUpperBodyPivot?: THREE.Object3D;
+  riderHeadPivot?: THREE.Object3D;
+  riderCapeSegments: THREE.Object3D[];
   flameScaleBase: number;
 }
 
@@ -58,7 +62,6 @@ export class PlayerGlider {
   private readonly hairMat: THREE.MeshStandardMaterial;
   private readonly eyeWhiteMat: THREE.MeshBasicMaterial;
   private readonly eyePupilMat: THREE.MeshStandardMaterial;
-  private readonly blushMat: THREE.MeshStandardMaterial;
 
   // Per-mount container & disposal tracking (Sets prevent double-dispose when shared)
   private readonly mountGroup = new THREE.Group();
@@ -120,44 +123,44 @@ export class PlayerGlider {
       this.thrusterRightAnchor
     );
 
-    // Shared rider materials
+    // Shared rider materials with Nusantara Batik/Songket PBR weave
     this.riderOutfitMat = new THREE.MeshStandardMaterial({
       color: 0xe11d48,
-      roughness: 0.55,
-      metalness: 0.08
+      map: textures.batikPBR.map,
+      normalMap: textures.batikPBR.normalMap,
+      roughnessMap: textures.batikPBR.roughnessMap,
+      normalScale: new THREE.Vector2(0.55, 0.55),
+      roughness: 0.58,
+      metalness: 0.14
     });
     this.riderScarfMat = new THREE.MeshStandardMaterial({
       color: 0xf8fafc,
-      roughness: 0.5,
-      metalness: 0.06
+      normalMap: textures.batikPBR.normalMap,
+      normalScale: new THREE.Vector2(0.32, 0.32),
+      roughness: 0.52,
+      metalness: 0.08,
+      side: THREE.DoubleSide
     });
     this.riderHatAccentMat = new THREE.MeshStandardMaterial({
       color: 0xfbbf24,
-      roughness: 0.34,
-      metalness: 0.35
+      roughness: 0.3,
+      metalness: 0.45
     });
     this.skinMat = new THREE.MeshStandardMaterial({
-      color: 0xd99b66,
-      roughness: 0.65,
-      metalness: 0.04
+      color: 0xd49460,
+      roughness: 0.56,
+      metalness: 0.03
     });
     this.hairMat = new THREE.MeshStandardMaterial({
-      color: 0x1e1b18,
-      roughness: 0.7,
-      metalness: 0.05
+      color: 0x161412,
+      roughness: 0.42,
+      metalness: 0.12
     });
-    this.eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    this.eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
     this.eyePupilMat = new THREE.MeshStandardMaterial({
       color: 0x0f172a,
       roughness: 0.15,
       metalness: 0.1
-    });
-    this.blushMat = new THREE.MeshStandardMaterial({
-      color: 0xff7b9c,
-      emissive: 0xff4d79,
-      emissiveIntensity: 0.2,
-      roughness: 0.6,
-      metalness: 0.02
     });
 
     // Shared GLSL afterburner / magical sparkle plumes
@@ -357,7 +360,7 @@ export class PlayerGlider {
       legPivots: [],
       propellers: [],
       sailMeshes: [],
-      riderScarfSegments: [],
+      riderCapeSegments: [],
       flameScaleBase: 0.55
     };
   }
@@ -631,11 +634,44 @@ export class PlayerGlider {
       this.rig.sailMeshes[i].scale.z = puff;
     }
 
-    // Rider fluttering scarf
-    for (let i = 0; i < this.rig.riderScarfSegments.length; i++) {
-      const seg = this.rig.riderScarfSegments[i];
-      seg.rotation.x = Math.sin(this.elapsed * (hot ? 16 : 10) - i * 0.9) * 0.22 + 0.15;
-      seg.rotation.y = Math.cos(this.elapsed * 8 - i * 0.7) * 0.16;
+    // Heroic rider dynamic riding lean, aerodynamic crouch & flowing cape wave
+    if (this.rig.riderUpperBodyPivot) {
+      const targetLeanZ = -steerX * 0.18;
+      const targetCrouchX = hot ? 0.34 : 0.16;
+      const alpha = Math.min(1, dt * 8);
+      this.rig.riderUpperBodyPivot.rotation.z = THREE.MathUtils.lerp(
+        this.rig.riderUpperBodyPivot.rotation.z,
+        targetLeanZ,
+        alpha
+      );
+      this.rig.riderUpperBodyPivot.rotation.x = THREE.MathUtils.lerp(
+        this.rig.riderUpperBodyPivot.rotation.x,
+        targetCrouchX,
+        alpha
+      );
+    }
+
+    if (this.rig.riderHeadPivot) {
+      const targetYaw = -steerX * 0.22;
+      const targetCounterPitch = hot ? -0.22 : -0.1;
+      const alpha = Math.min(1, dt * 9);
+      this.rig.riderHeadPivot.rotation.y = THREE.MathUtils.lerp(
+        this.rig.riderHeadPivot.rotation.y,
+        targetYaw,
+        alpha
+      );
+      this.rig.riderHeadPivot.rotation.x = THREE.MathUtils.lerp(
+        this.rig.riderHeadPivot.rotation.x,
+        targetCounterPitch,
+        alpha
+      );
+    }
+
+    for (let i = 0; i < this.rig.riderCapeSegments.length; i++) {
+      const seg = this.rig.riderCapeSegments[i];
+      const waveSpeed = hot ? 16 : 9.5;
+      seg.rotation.x = Math.sin(this.elapsed * waveSpeed - i * 0.85) * (0.12 + i * 0.05) + 0.08;
+      seg.rotation.y = Math.cos(this.elapsed * 6.5 - i * 0.65) * 0.09;
     }
 
     // Volumetric afterburners / magical jet boost plumes
@@ -718,41 +754,54 @@ export class PlayerGlider {
     this.thrusterGlowRight.position.copy(this.thrusterRightAnchor.position);
   }
 
-  private addCuteEyes(parent: THREE.Object3D, x: number, y: number, z: number, scale = 1): void {
+  private addRealisticRiderEyes(parent: THREE.Object3D): void {
+    const irisMat = this.makeMat({ color: 0x3b2314, roughness: 0.22, metalness: 0.08 });
     for (const side of [-1, 1] as const) {
-      const white = this.addMesh(
-        parent,
-        new THREE.SphereGeometry(0.068 * scale, 10, 8),
+      const eyeGroup = new THREE.Group();
+      eyeGroup.position.set(side * 0.036, 0.012, -0.094);
+      eyeGroup.rotation.y = side * -0.18;
+      parent.add(eyeGroup);
+
+      const sclera = this.addMesh(
+        eyeGroup,
+        new THREE.SphereGeometry(0.014, 8, 6),
         this.eyeWhiteMat,
         false
       );
-      white.position.set(side * x, y, z);
-      white.scale.set(0.9, 1.08, 0.72);
+      sclera.scale.set(1.25, 0.65, 0.55);
+
+      const iris = this.addMesh(
+        eyeGroup,
+        new THREE.SphereGeometry(0.0095, 8, 6),
+        irisMat,
+        false
+      );
+      iris.position.set(0, 0, -0.005);
 
       const pupil = this.addMesh(
-        parent,
-        new THREE.SphereGeometry(0.044 * scale, 10, 8),
+        eyeGroup,
+        new THREE.SphereGeometry(0.0055, 6, 6),
         this.eyePupilMat,
         false
       );
-      pupil.position.set(side * (x + 0.008 * scale), y, z - 0.028 * scale);
+      pupil.position.set(0, 0, -0.01);
 
       const glint = this.addMesh(
-        parent,
-        new THREE.SphereGeometry(0.017 * scale, 6, 6),
+        eyeGroup,
+        new THREE.SphereGeometry(0.0024, 5, 5),
         this.eyeWhiteMat,
         false
       );
-      glint.position.set(side * (x + 0.018 * scale), y + 0.02 * scale, z - 0.056 * scale);
+      glint.position.set(side * 0.003, 0.003, -0.013);
 
-      const blush = this.addMesh(
-        parent,
-        new THREE.SphereGeometry(0.052 * scale, 8, 8),
-        this.blushMat,
+      const brow = this.addMesh(
+        eyeGroup,
+        new THREE.BoxGeometry(0.032, 0.007, 0.012),
+        this.hairMat,
         false
       );
-      blush.scale.set(1.2, 0.65, 0.55);
-      blush.position.set(side * (x + 0.04 * scale), y - 0.065 * scale, z + 0.025 * scale);
+      brow.position.set(0, 0.019, -0.004);
+      brow.rotation.z = -side * 0.1;
     }
   }
 
@@ -831,211 +880,531 @@ export class PlayerGlider {
     }
   }
 
-  private buildCuteRider(headgear: HeadgearStyle): THREE.Group {
-    const rider = new THREE.Group();
+  private buildOrnateSaddle(
+    primaryMat: THREE.Material,
+    trimGoldMat: THREE.Material,
+    width = 0.54,
+    length = 0.5
+  ): THREE.Group {
+    const saddleGroup = new THREE.Group();
+    const leatherMat = this.makeMat({ color: 0x3b1f12, roughness: 0.62, metalness: 0.1 });
 
-    // Chubby torso
-    const torsoGeo = new THREE.CapsuleGeometry(0.14, 0.17, 6, 12);
-    const torso = this.addMesh(rider, torsoGeo, this.riderOutfitMat);
-    torso.position.set(0, 0.21, 0);
-    torso.rotation.x = 0.16;
+    // Contoured saddle cloth draping over mount's back
+    const clothGeo = createSaddleBaseGeo(width * 1.18, length * 1.14, 0.12);
+    const cloth = this.addMesh(saddleGroup, clothGeo, primaryMat);
+    cloth.position.y = -0.02;
 
-    // Gold waist sash
-    const sash = this.addMesh(
-      rider,
-      new THREE.CylinderGeometry(0.15, 0.155, 0.055, 12),
-      this.riderHatAccentMat
+    // Sculpted leather-and-gold saddle seat with raised pommel & cantle
+    const seatGeo = createSaddleBaseGeo(width * 0.9, length * 0.92, 0.075);
+    const seat = this.addMesh(saddleGroup, seatGeo, leatherMat);
+    seat.position.y = 0.01;
+
+    // Gilded pommel & cantle trim arches
+    const pommelTrim = this.addMesh(
+      saddleGroup,
+      new THREE.TorusGeometry(width * 0.34, 0.018, 6, 14, Math.PI),
+      trimGoldMat
     );
-    sash.position.set(0, 0.12, 0.01);
+    pommelTrim.position.set(0, 0.04, -length * 0.42);
+    pommelTrim.rotation.x = 0.35;
 
-    // Legs hugging mount sides + boots
-    const bootMat = this.makeMat({ color: 0x3b2314, roughness: 0.75 });
-    for (const side of [-1, 1] as const) {
-      const leg = this.addMesh(
+    const cantleTrim = this.addMesh(
+      saddleGroup,
+      new THREE.TorusGeometry(width * 0.36, 0.02, 6, 14, Math.PI),
+      trimGoldMat
+    );
+    cantleTrim.position.set(0, 0.055, length * 0.42);
+    cantleTrim.rotation.x = -0.3;
+
+    return saddleGroup;
+  }
+
+  private buildHeroicRider(
+    headgear: HeadgearStyle,
+    options: { stance: 'riding' | 'captain'; reinTarget?: THREE.Vector3 } = { stance: 'riding' }
+  ): THREE.Group {
+    const rider = new THREE.Group();
+    const goldArmorMat = this.makeGoldMat(0.16);
+    const leatherMat = this.makeMat({ color: 0x2c1a10, roughness: 0.58, metalness: 0.12 });
+    const kerisWoodMat = this.makeMat({ color: 0x451a03, roughness: 0.42, metalness: 0.18 });
+    const isCaptain = options.stance === 'captain';
+    const hipY = isCaptain ? 0.35 : 0.05;
+
+    // 1. Sculpted Pelvis & Draped Kain Dodot Waist Wrap + Golden Pending Belt
+    const pelvis = this.addMesh(rider, new THREE.SphereGeometry(0.112, 12, 10), this.riderOutfitMat);
+    pelvis.scale.set(1.12, 0.72, 0.92);
+    pelvis.position.set(0, hipY, 0);
+
+    const dodotWrap = this.addMesh(
+      rider,
+      new THREE.CylinderGeometry(0.118, 0.168, 0.16, 14),
+      this.riderOutfitMat
+    );
+    dodotWrap.position.set(0, hipY - 0.01, 0.005);
+
+    const belt = this.addMesh(
+      rider,
+      new THREE.TorusGeometry(0.122, 0.021, 8, 18),
+      goldArmorMat
+    );
+    belt.rotation.x = Math.PI / 2;
+    belt.position.set(0, hipY + 0.052, 0);
+
+    for (const zSign of [-1, 1] as const) {
+      const buckle = this.addMesh(
         rider,
-        new THREE.CapsuleGeometry(0.055, 0.15, 4, 8),
-        this.riderOutfitMat
+        new THREE.OctahedronGeometry(0.028, 0),
+        goldArmorMat,
+        false
       );
-      leg.position.set(side * 0.16, 0.04, -0.02);
-      leg.rotation.z = side * 0.42;
-      leg.rotation.x = -0.35;
-
-      const boot = this.addMesh(rider, new THREE.SphereGeometry(0.064, 8, 8), bootMat);
-      boot.scale.set(0.9, 0.85, 1.3);
-      boot.position.set(side * 0.23, -0.05, -0.08);
-
-      // Arms reaching forward
-      const arm = this.addMesh(
-        rider,
-        new THREE.CapsuleGeometry(0.045, 0.15, 4, 8),
-        this.riderOutfitMat
-      );
-      arm.position.set(side * 0.16, 0.25, -0.11);
-      arm.rotation.x = Math.PI * 0.34;
-      arm.rotation.z = -side * 0.22;
-
-      const hand = this.addMesh(rider, new THREE.SphereGeometry(0.048, 8, 8), this.skinMat);
-      hand.position.set(side * 0.12, 0.19, -0.22);
+      buckle.scale.set(1.1, 0.85, 0.5);
+      buckle.position.set(0, hipY + 0.052, zSign * 0.128);
     }
 
-    // Flowing two-segment scarf
-    const scarfCollar = this.addMesh(
-      rider,
-      new THREE.TorusGeometry(0.12, 0.036, 8, 14),
-      this.riderScarfMat
+    // Ceremonial Nusantara Keris tucked diagonally across lower back
+    const kerisGroup = new THREE.Group();
+    kerisGroup.position.set(0.02, hipY + 0.05, 0.132);
+    kerisGroup.rotation.z = -0.58;
+    kerisGroup.rotation.x = 0.12;
+    rider.add(kerisGroup);
+    this.addMesh(kerisGroup, new THREE.CylinderGeometry(0.016, 0.012, 0.24, 8), kerisWoodMat);
+    const warangka = this.addMesh(
+      kerisGroup,
+      new THREE.BoxGeometry(0.095, 0.026, 0.028),
+      goldArmorMat
     );
-    scarfCollar.rotation.x = Math.PI / 2;
-    scarfCollar.position.set(0, 0.35, -0.02);
-
-    const scarfPivot1 = new THREE.Group();
-    scarfPivot1.position.set(0, 0.35, 0.1);
-    rider.add(scarfPivot1);
-    const scarfPiece1 = this.addMesh(
-      scarfPivot1,
-      new THREE.BoxGeometry(0.105, 0.03, 0.27),
-      this.riderScarfMat
+    warangka.position.y = 0.105;
+    const ukiranHilt = this.addMesh(
+      kerisGroup,
+      createTaperedLoftGeo(
+        [
+          new THREE.Vector3(0, 0.115, 0),
+          new THREE.Vector3(0.018, 0.16, 0.01),
+          new THREE.Vector3(0.032, 0.185, 0.024)
+        ],
+        (u) => THREE.MathUtils.lerp(0.016, 0.02, u),
+        { tubularSegments: 8, radialSegments: 8 }
+      ),
+      goldArmorMat
     );
-    scarfPiece1.position.set(0, 0, 0.12);
+    ukiranHilt.castShadow = false;
 
-    const scarfPivot2 = new THREE.Group();
-    scarfPivot2.position.set(0, 0, 0.25);
-    scarfPivot1.add(scarfPivot2);
-    const scarfPiece2 = this.addMesh(
-      scarfPivot2,
-      new THREE.BoxGeometry(0.09, 0.026, 0.25),
-      this.riderScarfMat
+    // 2. Articulated 2-Segment Legs + Tailored Leather-and-Gold Boots
+    for (const side of [-1, 1] as const) {
+      const hipPt = new THREE.Vector3(side * 0.1, hipY - 0.01, 0.0);
+      const kneePt = isCaptain
+        ? new THREE.Vector3(side * 0.13, hipY - 0.17, -0.02)
+        : new THREE.Vector3(side * 0.28, hipY - 0.09, -0.15);
+      const anklePt = isCaptain
+        ? new THREE.Vector3(side * 0.135, 0.035, 0.01)
+        : new THREE.Vector3(side * 0.31, hipY - 0.25, -0.04);
+
+      const thighGeo = createTaperedLoftGeo(
+        [hipPt, kneePt],
+        (u) => THREE.MathUtils.lerp(0.068, 0.05, u),
+        { tubularSegments: 8, radialSegments: 10 }
+      );
+      this.addMesh(rider, thighGeo, this.riderOutfitMat);
+
+      const kneeGuard = this.addMesh(rider, new THREE.SphereGeometry(0.05, 8, 8), goldArmorMat);
+      kneeGuard.scale.set(0.85, 0.95, 0.9);
+      kneeGuard.position.copy(kneePt).add(new THREE.Vector3(0, 0, -0.015));
+
+      const calfGeo = createTaperedLoftGeo(
+        [kneePt, anklePt],
+        (u) => THREE.MathUtils.lerp(0.048, 0.036, u),
+        { tubularSegments: 8, radialSegments: 10 }
+      );
+      this.addMesh(rider, calfGeo, leatherMat);
+
+      const cuff = this.addMesh(
+        rider,
+        new THREE.TorusGeometry(0.044, 0.011, 6, 12),
+        goldArmorMat
+      );
+      cuff.position.copy(kneePt).lerp(anklePt, 0.28);
+      cuff.rotation.x = Math.PI / 2;
+
+      const bootFoot = this.addMesh(rider, new THREE.SphereGeometry(0.042, 8, 8), leatherMat);
+      bootFoot.scale.set(0.85, 0.65, 1.85);
+      bootFoot.position.set(anklePt.x, anklePt.y - 0.018, anklePt.z - 0.048);
+    }
+
+    // 3. Articulated Upper Body Pivot (athletic torso, pauldrons, arms, cape, head)
+    const upperPivot = new THREE.Group();
+    upperPivot.position.set(0, hipY + 0.05, 0);
+    rider.add(upperPivot);
+    this.rig.riderUpperBodyPivot = upperPivot;
+
+    // Athletic Sculpted Torso (narrow waist -> broad heroic chest & shoulders)
+    const torsoGeo = createTaperedLoftGeo(
+      [
+        new THREE.Vector3(0, 0.0, 0.0),
+        new THREE.Vector3(0, 0.14, -0.01),
+        new THREE.Vector3(0, 0.28, -0.018),
+        new THREE.Vector3(0, 0.34, -0.02)
+      ],
+      (u) => {
+        if (u < 0.65) return THREE.MathUtils.lerp(0.105, 0.145, u / 0.65);
+        return THREE.MathUtils.lerp(0.145, 0.092, (u - 0.65) / 0.35);
+      },
+      { tubularSegments: 14, radialSegments: 14, scaleX: 1.22, scaleY: 0.82 }
     );
-    scarfPiece2.position.set(0, 0, 0.11);
-    this.rig.riderScarfSegments.push(scarfPivot1, scarfPivot2);
+    this.addMesh(upperPivot, torsoGeo, this.riderOutfitMat);
 
-    // Big cute chibi head
+    // High Royal Collar & Diagonal Golden Selempang Chest Sash
+    const collar = this.addMesh(
+      upperPivot,
+      new THREE.CylinderGeometry(0.062, 0.072, 0.055, 12),
+      this.riderOutfitMat
+    );
+    collar.position.set(0, 0.345, -0.02);
+
+    const collarRim = this.addMesh(
+      upperPivot,
+      new THREE.TorusGeometry(0.064, 0.011, 6, 14),
+      goldArmorMat
+    );
+    collarRim.rotation.x = Math.PI / 2;
+    collarRim.position.set(0, 0.37, -0.02);
+
+    const selempangGeo = createTaperedLoftGeo(
+      [
+        new THREE.Vector3(-0.12, 0.32, -0.03),
+        new THREE.Vector3(0.0, 0.19, -0.115),
+        new THREE.Vector3(0.11, 0.04, -0.05)
+      ],
+      () => 0.024,
+      { tubularSegments: 10, radialSegments: 6, scaleY: 0.5 }
+    );
+    this.addMesh(upperPivot, selempangGeo, goldArmorMat, false);
+
+    const chestMedallion = this.addMesh(
+      upperPivot,
+      new THREE.OctahedronGeometry(0.03, 0),
+      this.riderHatAccentMat,
+      false
+    );
+    chestMedallion.scale.set(1.0, 1.25, 0.5);
+    chestMedallion.position.set(0, 0.24, -0.12);
+
+    // Gilded Shoulder Pauldrons (Kelat Bahu) & 2-Segment Articulated Arms + Wrist Bracers
+    const handPoints: THREE.Vector3[] = [];
+    for (const side of [-1, 1] as const) {
+      const shoulderPt = new THREE.Vector3(side * 0.175, 0.295, -0.015);
+      const pauldron = this.addMesh(upperPivot, new THREE.SphereGeometry(0.072, 10, 8), goldArmorMat);
+      pauldron.scale.set(1.05, 0.56, 1.15);
+      pauldron.position.set(side * 0.185, 0.315, -0.015);
+      pauldron.rotation.z = -side * 0.28;
+
+      const elbowPt = new THREE.Vector3(side * 0.21, 0.155, -0.065);
+      const handPt = isCaptain
+        ? new THREE.Vector3(side * 0.11, 0.01, -0.22)
+        : new THREE.Vector3(side * 0.145, 0.115, -0.24);
+      handPoints.push(handPt);
+
+      const upperArmGeo = createTaperedLoftGeo(
+        [shoulderPt, elbowPt],
+        (u) => THREE.MathUtils.lerp(0.048, 0.038, u),
+        { tubularSegments: 8, radialSegments: 8 }
+      );
+      this.addMesh(upperPivot, upperArmGeo, this.riderOutfitMat);
+
+      const forearmGeo = createTaperedLoftGeo(
+        [elbowPt, handPt],
+        (u) => THREE.MathUtils.lerp(0.038, 0.03, u),
+        { tubularSegments: 8, radialSegments: 8 }
+      );
+      this.addMesh(upperPivot, forearmGeo, this.riderOutfitMat);
+
+      // Burnished gold wrist bracer (Gelang Kana) + dark leather gloved hand
+      const bracer = this.addMesh(
+        upperPivot,
+        new THREE.CylinderGeometry(0.036, 0.034, 0.07, 10),
+        goldArmorMat
+      );
+      const bracerPos = elbowPt.clone().lerp(handPt, 0.72);
+      bracer.position.copy(bracerPos);
+      bracer.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        handPt.clone().sub(elbowPt).normalize()
+      );
+
+      const hand = this.addMesh(upperPivot, new THREE.SphereGeometry(0.036, 8, 8), leatherMat);
+      hand.scale.set(0.95, 0.85, 1.25);
+      hand.position.copy(handPt);
+    }
+
+    // Taut Golden Reins connecting rider hands to mount neck/collar
+    if (options.reinTarget) {
+      const targetLocal = options.reinTarget.clone();
+      // Convert mount-relative target into rider upperPivot local approximation
+      const worldOffsetY = hipY + 0.05;
+      for (let i = 0; i < 2; i++) {
+        const side = i === 0 ? -1 : 1;
+        const startPt = handPoints[i];
+        const endPt = new THREE.Vector3(
+          side * 0.16,
+          targetLocal.y - worldOffsetY,
+          targetLocal.z
+        );
+        const midPt = startPt.clone().lerp(endPt, 0.5).add(new THREE.Vector3(0, -0.05, 0));
+        const reinGeo = createTaperedLoftGeo(
+          [startPt, midPt, endPt],
+          () => 0.012,
+          { tubularSegments: 12, radialSegments: 6 }
+        );
+        this.addMesh(upperPivot, reinGeo, goldArmorMat, false);
+      }
+    }
+
+    // 4. Flowing Multi-Segment Curved Royal Cape / Selendang (snug at collar, slightly draped left to reveal Keris)
+    const capeBase = new THREE.Group();
+    capeBase.position.set(-0.025, 0.335, 0.048);
+    capeBase.rotation.y = -0.14;
+    upperPivot.add(capeBase);
+    const clasp = this.addMesh(capeBase, new THREE.SphereGeometry(0.036, 8, 8), goldArmorMat);
+    clasp.scale.set(1.5, 0.75, 0.6);
+
+    let capeParent: THREE.Object3D = capeBase;
+    const segLen = isCaptain ? 0.15 : 0.18;
+    const widths: Array<[number, number]> = [
+      [0.2, 0.26],
+      [0.26, 0.32],
+      [0.32, 0.36]
+    ];
+    for (let i = 0; i < 3; i++) {
+      const segPivot = new THREE.Group();
+      segPivot.position.set(0, i === 0 ? -0.01 : 0, i === 0 ? 0.01 : segLen - 0.015);
+      capeParent.add(segPivot);
+      const [topW, botW] = widths[i];
+      this.addMesh(
+        segPivot,
+        createCapeSegmentGeo(topW, botW, segLen, 0.028, 0.012),
+        this.riderScarfMat
+      );
+      this.rig.riderCapeSegments.push(segPivot);
+      capeParent = segPivot;
+    }
+
+    // 5. Slender Neck + Realistic Sculpted Head & Nusantara Regional Headgear
+    const headPivot = new THREE.Group();
+    headPivot.position.set(0, 0.375, -0.02);
+    upperPivot.add(headPivot);
+    this.rig.riderHeadPivot = headPivot;
+
+    const neck = this.addMesh(
+      headPivot,
+      new THREE.CylinderGeometry(0.042, 0.05, 0.085, 10),
+      this.skinMat
+    );
+    neck.position.set(0, 0.035, 0);
+
     const head = new THREE.Group();
-    head.position.set(0, 0.51, -0.04);
-    rider.add(head);
+    head.position.set(0, 0.145, -0.005);
+    headPivot.add(head);
 
-    this.addMesh(head, new THREE.SphereGeometry(0.175, 16, 14), this.skinMat);
+    // Sculpted oval cranium + tapered jaw/chin + nose bridge + ears + realistic eyes
+    const cranium = this.addMesh(head, new THREE.SphereGeometry(0.098, 16, 14), this.skinMat);
+    cranium.scale.set(0.92, 1.12, 1.02);
+
+    const jaw = this.addMesh(head, new THREE.SphereGeometry(0.072, 12, 10), this.skinMat);
+    jaw.scale.set(0.86, 0.98, 0.92);
+    jaw.position.set(0, -0.042, -0.016);
+
+    const nose = this.addMesh(head, new THREE.ConeGeometry(0.015, 0.046, 5), this.skinMat, false);
+    nose.position.set(0, -0.006, -0.098);
+    nose.rotation.x = -Math.PI * 0.42;
+
+    for (const side of [-1, 1] as const) {
+      const ear = this.addMesh(head, new THREE.SphereGeometry(0.024, 8, 8), this.skinMat, false);
+      ear.scale.set(0.45, 0.95, 0.7);
+      ear.position.set(side * 0.09, 0.0, 0.005);
+    }
+
+    this.addRealisticRiderEyes(head);
+
+    // Sleek layered dark hair + windswept nape lock
     const hairCap = this.addMesh(
       head,
-      new THREE.SphereGeometry(0.18, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      new THREE.SphereGeometry(0.102, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.56),
       this.hairMat
     );
-    hairCap.rotation.x = 0.25;
+    hairCap.scale.set(0.94, 1.12, 1.04);
+    hairCap.rotation.x = 0.24;
 
-    this.addCuteEyes(head, 0.068, -0.01, -0.145, 0.82);
+    const napeHair = this.addMesh(
+      head,
+      createFlamePetalGeo(0.15, 0.08, 0.026, 0.08),
+      this.hairMat
+    );
+    napeHair.position.set(0, -0.01, 0.092);
+    napeHair.rotation.x = Math.PI * 0.82;
 
-    // Nusantara Regional Headgear
+    // 6. High-Craft Sculpted Nusantara Regional Headgear (fitted to 0.10m realistic head)
     if (headgear === 'blangkon') {
-      const soganMat = this.makeMat({ color: 0x78350f, roughness: 0.65 });
-      const cap = this.addMesh(
+      const soganMat = this.makeMat({
+        color: 0x78350f,
+        map: this.textures.batikPBR.map,
+        normalMap: this.textures.batikPBR.normalMap,
+        normalScale: new THREE.Vector2(0.5, 0.5),
+        roughness: 0.58
+      });
+      const cap = this.addMesh(head, new THREE.CylinderGeometry(0.098, 0.108, 0.082, 16), soganMat);
+      cap.position.set(0, 0.072, 0.005);
+      const wiruBand = this.addMesh(
         head,
-        new THREE.CylinderGeometry(0.175, 0.19, 0.125, 14),
+        new THREE.TorusGeometry(0.102, 0.016, 6, 16),
         soganMat
       );
-      cap.position.set(0, 0.115, 0);
-      const mondolan = this.addMesh(head, new THREE.SphereGeometry(0.08, 10, 10), soganMat);
-      mondolan.position.set(0, 0.08, 0.18);
-      const badge = this.addMesh(
+      wiruBand.rotation.x = Math.PI / 2 - 0.16;
+      wiruBand.position.set(0, 0.044, -0.004);
+      const mondolan = this.addMesh(head, new THREE.SphereGeometry(0.048, 10, 10), soganMat);
+      mondolan.position.set(0, 0.048, 0.106);
+      const brooch = this.addMesh(
         head,
-        new THREE.OctahedronGeometry(0.038, 0),
-        this.riderHatAccentMat
+        new THREE.OctahedronGeometry(0.024, 0),
+        goldArmorMat,
+        false
       );
-      badge.position.set(0, 0.115, -0.185);
+      brooch.position.set(0, 0.072, -0.108);
     } else if (headgear === 'udeng') {
-      const whiteCloth = this.makeMat({ color: 0xf8fafc, roughness: 0.55 });
+      const whiteCloth = this.makeMat({
+        color: 0xf8fafc,
+        normalMap: this.textures.batikPBR.normalMap,
+        normalScale: new THREE.Vector2(0.3, 0.3),
+        roughness: 0.52
+      });
       const wrap = this.addMesh(
         head,
-        new THREE.TorusGeometry(0.172, 0.05, 8, 16),
+        new THREE.TorusGeometry(0.098, 0.028, 8, 18),
         whiteCloth
       );
-      wrap.rotation.x = Math.PI / 2 - 0.12;
-      wrap.position.set(0, 0.095, 0);
-      const knot = this.addMesh(head, new THREE.ConeGeometry(0.072, 0.135, 4), whiteCloth);
-      knot.position.set(0, 0.2, -0.125);
-      knot.rotation.x = 0.2;
+      wrap.rotation.x = Math.PI / 2 - 0.14;
+      wrap.position.set(0, 0.056, 0);
+      const peak = this.addMesh(
+        head,
+        createFlamePetalGeo(0.11, 0.068, 0.024, 0.03),
+        whiteCloth
+      );
+      peak.position.set(0, 0.068, -0.082);
+      peak.rotation.x = 0.22;
       const goldTrim = this.addMesh(
         head,
-        new THREE.TorusGeometry(0.174, 0.017, 6, 16),
-        this.riderHatAccentMat
+        new THREE.TorusGeometry(0.101, 0.011, 6, 18),
+        goldArmorMat
       );
-      goldTrim.rotation.x = Math.PI / 2 - 0.12;
-      goldTrim.position.set(0, 0.068, 0);
-    } else if (headgear === 'pelangi') {
-      const band = this.addMesh(
+      goldTrim.rotation.x = Math.PI / 2 - 0.14;
+      goldTrim.position.set(0, 0.038, 0);
+      const templeGem = this.addMesh(
         head,
-        new THREE.TorusGeometry(0.174, 0.034, 8, 16),
-        this.riderHatAccentMat
+        new THREE.OctahedronGeometry(0.022, 0),
+        goldArmorMat,
+        false
       );
-      band.rotation.x = Math.PI / 2 - 0.15;
-      band.position.set(0, 0.105, 0);
+      templeGem.position.set(0, 0.095, -0.095);
+    } else if (headgear === 'pelangi') {
+      const sigerBand = this.addMesh(
+        head,
+        new THREE.TorusGeometry(0.1, 0.018, 8, 18),
+        goldArmorMat
+      );
+      sigerBand.rotation.x = Math.PI / 2 - 0.18;
+      sigerBand.position.set(0, 0.062, 0);
+      for (let i = -2; i <= 2; i++) {
+        const s = 1 - Math.abs(i) * 0.2;
+        const spire = this.addMesh(
+          head,
+          createFlamePetalGeo(0.11 * s, 0.048 * s, 0.014, 0.02),
+          goldArmorMat
+        );
+        spire.position.set(i * 0.034, 0.072, -0.086 + Math.abs(i) * 0.018);
+        spire.rotation.z = -i * 0.28;
+        spire.rotation.x = 0.22;
+      }
       const starGem = this.addMesh(
         head,
-        new THREE.OctahedronGeometry(0.052, 0),
+        new THREE.OctahedronGeometry(0.028, 0),
         this.makeMat({
           color: 0xff66c4,
           emissive: 0xff66c4,
-          emissiveIntensity: 1.2
-        })
+          emissiveIntensity: 1.25
+        }),
+        false
       );
-      starGem.position.set(0, 0.15, -0.178);
+      starGem.position.set(0, 0.098, -0.106);
     } else if (headgear === 'songkok_recca') {
-      const songkokMat = this.makeMat({ color: 0x1e1b18, roughness: 0.6 });
+      const songkokMat = this.makeMat({
+        color: 0x1e1b18,
+        normalMap: this.textures.batikPBR.normalMap,
+        normalScale: new THREE.Vector2(0.45, 0.45),
+        roughness: 0.56
+      });
       const cyl = this.addMesh(
         head,
-        new THREE.CylinderGeometry(0.158, 0.175, 0.15, 14),
+        new THREE.CylinderGeometry(0.092, 0.102, 0.095, 16),
         songkokMat
       );
-      cyl.position.set(0, 0.135, 0.01);
+      cyl.position.set(0, 0.082, 0.005);
       const band = this.addMesh(
         head,
-        new THREE.CylinderGeometry(0.168, 0.177, 0.048, 14),
-        this.riderHatAccentMat
+        new THREE.CylinderGeometry(0.099, 0.104, 0.028, 16),
+        goldArmorMat
       );
-      band.position.set(0, 0.088, 0.01);
+      band.position.set(0, 0.052, 0.005);
+      const crest = this.addMesh(head, new THREE.OctahedronGeometry(0.022, 0), goldArmorMat, false);
+      crest.position.set(0, 0.088, -0.098);
     } else if (headgear === 'mahkota_papua') {
       const band = this.addMesh(
         head,
-        new THREE.TorusGeometry(0.172, 0.034, 8, 16),
-        this.riderHatAccentMat
+        new THREE.TorusGeometry(0.1, 0.02, 8, 18),
+        goldArmorMat
       );
-      band.rotation.x = Math.PI / 2 - 0.1;
-      band.position.set(0, 0.105, 0);
-      const featherCols = [0xef4444, 0xfacc15, 0x10b981, 0xfacc15, 0xef4444];
+      band.rotation.x = Math.PI / 2 - 0.12;
+      band.position.set(0, 0.062, 0);
+      const featherCols = [0xef4444, 0xfacc15, 0x10b981, 0xfef9c3, 0x10b981, 0xfacc15, 0xef4444];
+      const featherGeo = createFeatherGeo(0.2, 0.044, 0.012, 0.03, 0.02);
       for (let i = 0; i < featherCols.length; i++) {
-        const fMat = this.makeMat({ color: featherCols[i], roughness: 0.45 });
-        const feather = this.addMesh(
-          head,
-          new THREE.ConeGeometry(0.028, 0.21, 6),
-          fMat
-        );
-        const fan = (i - 2) * 0.28;
-        feather.position.set(Math.sin(fan) * 0.135, 0.23 + Math.cos(fan) * 0.04, 0.04);
-        feather.rotation.z = -fan * 0.85;
-        feather.rotation.x = -0.2;
+        const fMat = this.makeFeatherMat(featherCols[i]);
+        const f = this.addMesh(head, featherGeo, fMat, false);
+        const fan = (i - 3) * 0.24;
+        f.position.set(Math.sin(fan) * 0.082, 0.082, 0.02 + Math.abs(i - 3) * 0.01);
+        f.rotation.y = -Math.PI / 2 + fan * 0.5;
+        f.rotation.z = 0.72 - Math.abs(i - 3) * 0.08;
       }
     } else {
-      // topi_dayak
-      const dayakRed = this.makeMat({ color: 0xdc2626, roughness: 0.5 });
-      const cap = this.addMesh(
-        head,
-        new THREE.CylinderGeometry(0.155, 0.178, 0.125, 14),
-        dayakRed
-      );
-      cap.position.set(0, 0.125, 0);
+      // topi_dayak (Lavung beaded headband + sculpted Enggang tail feathers)
+      const dayakRed = this.makeMat({
+        color: 0xdc2626,
+        normalMap: this.textures.batikPBR.normalMap,
+        roughness: 0.48
+      });
+      const cap = this.addMesh(head, new THREE.CylinderGeometry(0.092, 0.104, 0.076, 16), dayakRed);
+      cap.position.set(0, 0.074, 0.005);
       const beadBand = this.addMesh(
         head,
-        new THREE.CylinderGeometry(0.18, 0.182, 0.038, 14),
-        this.riderHatAccentMat
+        new THREE.CylinderGeometry(0.105, 0.107, 0.024, 16),
+        goldArmorMat
       );
-      beadBand.position.set(0, 0.078, 0);
-      const whiteFeather = this.makeMat({ color: 0xf8fafc, roughness: 0.45 });
-      const tipBlack = this.makeMat({ color: 0x0f172a, roughness: 0.5 });
+      beadBand.position.set(0, 0.048, 0.005);
+      const frontEmblem = this.addMesh(
+        head,
+        new THREE.OctahedronGeometry(0.024, 0),
+        goldArmorMat,
+        false
+      );
+      frontEmblem.position.set(0, 0.075, -0.102);
+
+      const whiteFeather = this.makeFeatherMat(0xf8fafc);
+      const tipBlack = this.makeFeatherMat(0x0f172a);
+      const hornbillFeatherGeo = createFeatherGeo(0.25, 0.048, 0.012, 0.035, 0.03);
       for (const side of [-1, 1] as const) {
-        const f = this.addMesh(head, new THREE.BoxGeometry(0.032, 0.26, 0.065), whiteFeather);
-        f.position.set(side * 0.135, 0.26, 0.06);
-        f.rotation.z = -side * 0.35;
-        f.rotation.x = -0.25;
-        const tip = this.addMesh(f, new THREE.BoxGeometry(0.035, 0.075, 0.068), tipBlack);
-        tip.position.y = 0.088;
+        const f = this.addMesh(head, hornbillFeatherGeo, whiteFeather, false);
+        f.position.set(side * 0.085, 0.095, 0.04);
+        f.rotation.y = -Math.PI / 2 + side * 0.28;
+        f.rotation.z = 0.65;
+        const bar = this.addMesh(f, new THREE.BoxGeometry(0.055, 0.016, 0.042), tipBlack, false);
+        bar.position.set(0.18, 0.025, 0);
       }
     }
 
@@ -1404,20 +1773,24 @@ export class PlayerGlider {
       this.regGeo,
       sunTipMat,
       burnishedGoldMat,
-      0.66,
+      0.7,
       0.024,
       12,
       0.16
     );
-    prabha.position.set(0, 0.72, 0.38);
+    prabha.position.set(0, 0.86, 0.4);
     this.mountGroup.add(prabha);
     this.rig.haloPivots.push(prabha);
 
-    // Royal Saddle & Blangkon Rider
-    const saddle = this.addMesh(this.mountGroup, new THREE.BoxGeometry(0.5, 0.09, 0.48), crimsonMat);
-    saddle.position.set(0, 0.44, 0.02);
-    const rider = this.buildCuteRider('blangkon');
-    rider.position.set(0, 0.46, 0.03);
+    // Ornate Contoured Saddle & Heroic Blangkon Rider
+    const saddle = this.buildOrnateSaddle(crimsonMat, burnishedGoldMat, 0.56, 0.52);
+    saddle.position.set(0, 0.43, 0.02);
+    this.mountGroup.add(saddle);
+    const rider = this.buildHeroicRider('blangkon', {
+      stance: 'riding',
+      reinTarget: new THREE.Vector3(0, -0.05, -0.68)
+    });
+    rider.position.set(0, 0.45, 0.03);
     this.mountGroup.add(rider);
 
     this.wingtipLeftAnchor.position.set(-2.15, 0.32, 0.35);
@@ -1777,11 +2150,15 @@ export class PlayerGlider {
     this.mountGroup.add(pearlHalo);
     this.rig.haloPivots.push(pearlHalo);
 
-    // Temple Saddle & Udeng Bali Rider
-    const saddle = this.addMesh(this.mountGroup, new THREE.BoxGeometry(0.5, 0.09, 0.46), redMat);
-    saddle.position.set(0, 0.38, -0.14);
-    const rider = this.buildCuteRider('udeng');
-    rider.position.set(0, 0.41, -0.12);
+    // Ornate Temple Saddle & Heroic Udeng Bali Rider
+    const saddle = this.buildOrnateSaddle(redMat, goldMat, 0.54, 0.48);
+    saddle.position.set(0, 0.37, -0.13);
+    this.mountGroup.add(saddle);
+    const rider = this.buildHeroicRider('udeng', {
+      stance: 'riding',
+      reinTarget: new THREE.Vector3(0, -0.02, -0.64)
+    });
+    rider.position.set(0, 0.39, -0.12);
     this.mountGroup.add(rider);
 
     this.wingtipLeftAnchor.position.set(-1.26, 0.24, 0.12);
@@ -2087,17 +2464,15 @@ export class PlayerGlider {
       this.addMesh(tailPivot, strandGeo, tMat);
     }
 
-    // Ornate Royal Pelana Saddle & Pelangi Rider
-    const saddleCloth = this.addMesh(
-      this.mountGroup,
-      new THREE.BoxGeometry(0.54, 0.06, 0.54),
-      goldMat
-    );
-    saddleCloth.position.set(0, 0.39, 0.04);
-    const saddle = this.addMesh(this.mountGroup, new THREE.BoxGeometry(0.46, 0.08, 0.44), saddleMat);
-    saddle.position.set(0, 0.43, 0.04);
-    const rider = this.buildCuteRider('pelangi');
-    rider.position.set(0, 0.46, 0.05);
+    // Ornate Royal Pelana Saddle & Heroic Pelangi Rider
+    const saddle = this.buildOrnateSaddle(saddleMat, goldMat, 0.52, 0.5);
+    saddle.position.set(0, 0.41, 0.04);
+    this.mountGroup.add(saddle);
+    const rider = this.buildHeroicRider('pelangi', {
+      stance: 'riding',
+      reinTarget: new THREE.Vector3(0, 0.12, -0.68)
+    });
+    rider.position.set(0, 0.43, 0.04);
     this.mountGroup.add(rider);
 
     this.wingtipLeftAnchor.position.set(-1.82, 0.35, 0.22);
@@ -2240,16 +2615,16 @@ export class PlayerGlider {
 
     const helmStand = this.addMesh(
       this.mountGroup,
-      new THREE.BoxGeometry(0.08, 0.22, 0.08),
+      new THREE.BoxGeometry(0.08, 0.38, 0.08),
       darkWoodMat
     );
-    helmStand.position.set(0, 0.34, -0.22);
+    helmStand.position.set(0, 0.43, -0.22);
     const helmWheel = this.addMesh(
       this.mountGroup,
       new THREE.TorusGeometry(0.115, 0.018, 6, 12),
       brassMat
     );
-    helmWheel.position.set(0, 0.45, -0.26);
+    helmWheel.position.set(0, 0.62, -0.25);
 
     // Authentic Phinisi Schooner Rig: Tall Mainmast + Shorter Mizzenmast + Gaffs + Billowing Sails
     const mainMast = this.addMesh(
@@ -2372,9 +2747,9 @@ export class PlayerGlider {
     this.mountGroup.add(keelHalo);
     this.rig.haloPivots.push(keelHalo);
 
-    // Songkok Recca Captain Rider at the Helm (between masts)
-    const rider = this.buildCuteRider('songkok_recca');
-    rider.position.set(0, 0.25, -0.02);
+    // Songkok Recca Captain Rider standing at the Helm (between masts)
+    const rider = this.buildHeroicRider('songkok_recca', { stance: 'captain' });
+    rider.position.set(0, 0.24, -0.02);
     this.mountGroup.add(rider);
 
     this.wingtipLeftAnchor.position.set(-1.38, 0.14, 0.1);
@@ -2644,20 +3019,24 @@ export class PlayerGlider {
       this.regGeo,
       plumeCreamMat,
       plumeGoldMat,
-      0.58,
+      0.62,
       0.018,
       10,
       0.13
     );
-    paradiseHalo.position.set(0, 0.68, 0.34);
+    paradiseHalo.position.set(0, 0.82, 0.36);
     this.mountGroup.add(paradiseHalo);
     this.rig.haloPivots.push(paradiseHalo);
 
-    // Saddle & Mahkota Papua Rider
-    const saddle = this.addMesh(this.mountGroup, new THREE.BoxGeometry(0.46, 0.085, 0.44), emeraldMat);
-    saddle.position.set(0, 0.4, 0.02);
-    const rider = this.buildCuteRider('mahkota_papua');
-    rider.position.set(0, 0.42, 0.03);
+    // Ornate Saddle & Heroic Mahkota Papua Rider
+    const saddle = this.buildOrnateSaddle(emeraldMat, plumeGoldMat, 0.52, 0.48);
+    saddle.position.set(0, 0.39, 0.02);
+    this.mountGroup.add(saddle);
+    const rider = this.buildHeroicRider('mahkota_papua', {
+      stance: 'riding',
+      reinTarget: new THREE.Vector3(0, -0.06, -0.66)
+    });
+    rider.position.set(0, 0.41, 0.03);
     this.mountGroup.add(rider);
 
     this.wingtipLeftAnchor.position.set(-1.78, 0.25, 0.3);
@@ -2936,20 +3315,24 @@ export class PlayerGlider {
       this.regGeo,
       sunHaloMat,
       redCasqueMat,
-      0.62,
+      0.66,
       0.02,
       10,
       0.15
     );
-    sunHalo.position.set(0, 0.7, 0.36);
+    sunHalo.position.set(0, 0.84, 0.38);
     this.mountGroup.add(sunHalo);
     this.rig.haloPivots.push(sunHalo);
 
-    // Saddle & Topi Dayak Rider
-    const saddle = this.addMesh(this.mountGroup, new THREE.BoxGeometry(0.48, 0.09, 0.46), redCasqueMat);
+    // Ornate Saddle & Heroic Topi Dayak Rider
+    const saddle = this.buildOrnateSaddle(redCasqueMat, goldMat, 0.54, 0.48);
     saddle.position.set(0, 0.41, 0.04);
-    const rider = this.buildCuteRider('topi_dayak');
-    rider.position.set(0, 0.44, 0.05);
+    this.mountGroup.add(saddle);
+    const rider = this.buildHeroicRider('topi_dayak', {
+      stance: 'riding',
+      reinTarget: new THREE.Vector3(0, -0.08, -0.64)
+    });
+    rider.position.set(0, 0.43, 0.05);
     this.mountGroup.add(rider);
 
     this.wingtipLeftAnchor.position.set(-2.08, 0.28, 0.32);

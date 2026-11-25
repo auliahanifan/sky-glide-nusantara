@@ -459,3 +459,169 @@ export function buildMythicalHaloGroup(
 
   return group;
 }
+
+/**
+ * Curved flowing cloth cape / Selendang segment extending along +Z from 0..length,
+ * tapering/flaring from topW to bottomW with transverse camber and gentle wind ripple.
+ */
+export function createCapeSegmentGeo(
+  topW: number,
+  bottomW: number,
+  length: number,
+  archY = 0.025,
+  curlY = 0.015
+): THREE.BufferGeometry {
+  const segU = 8;
+  const segV = 6;
+  const cols = segU + 1;
+
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  for (let iv = 0; iv <= segV; iv++) {
+    const v = iv / segV;
+    const z = v * length;
+    const w = THREE.MathUtils.lerp(topW, bottomW, v);
+
+    for (let iu = 0; iu <= segU; iu++) {
+      const u = iu / segU;
+      const flank = (u - 0.5) * 2; // -1..1
+      const x = flank * w * 0.5;
+      const y = -flank * flank * archY + Math.sin(v * Math.PI) * curlY;
+      positions.push(x, y, z);
+      uvs.push(u, v);
+    }
+  }
+
+  for (let iv = 0; iv < segV; iv++) {
+    for (let iu = 0; iu < segU; iu++) {
+      const a = iv * cols + iu;
+      const b = iv * cols + iu + 1;
+      const c = (iv + 1) * cols + iu;
+      const d = (iv + 1) * cols + iu + 1;
+      indices.push(a, c, d);
+      indices.push(a, d, b);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Closed, watertight contoured saddle shell hugging the mount's spine with
+ * dipped seat, raised front pommel, and swept rear cantle.
+ */
+export function createSaddleBaseGeo(
+  width: number,
+  length: number,
+  archDrop = 0.09
+): THREE.BufferGeometry {
+  const segU = 10;
+  const segV = 10;
+  const cols = segU + 1;
+  const rows = segV + 1;
+  const layerVerts = cols * rows;
+
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  const evalOffset = (u: number, v: number) => {
+    const flank = (u - 0.5) * 2;
+    const x = flank * width * 0.5;
+    const z = (v - 0.5) * length;
+    const yArch = -flank * flank * archDrop;
+    const seatDip = -Math.sin(v * Math.PI) * 0.036;
+    const cantleLift = Math.pow(Math.max(0, (v - 0.62) / 0.38), 1.6) * 0.088;
+    const pommelLift = Math.pow(Math.max(0, (0.32 - v) / 0.32), 1.6) * 0.07;
+    const thick = 0.045 * (0.45 + 0.55 * Math.sin(u * Math.PI));
+    return { x, z, cy: yArch + seatDip + cantleLift + pommelLift, halfT: thick * 0.5 };
+  };
+
+  // Layer 0: Top face
+  for (let iv = 0; iv <= segV; iv++) {
+    const v = iv / segV;
+    for (let iu = 0; iu <= segU; iu++) {
+      const u = iu / segU;
+      const p = evalOffset(u, v);
+      positions.push(p.x, p.cy + p.halfT, p.z);
+      uvs.push(u, v);
+    }
+  }
+  // Layer 1: Bottom face
+  for (let iv = 0; iv <= segV; iv++) {
+    const v = iv / segV;
+    for (let iu = 0; iu <= segU; iu++) {
+      const u = iu / segU;
+      const p = evalOffset(u, v);
+      positions.push(p.x, p.cy - p.halfT, p.z);
+      uvs.push(u, v);
+    }
+  }
+
+  for (let iv = 0; iv < segV; iv++) {
+    for (let iu = 0; iu < segU; iu++) {
+      const a = iv * cols + iu;
+      const b = iv * cols + iu + 1;
+      const c = (iv + 1) * cols + iu;
+      const d = (iv + 1) * cols + iu + 1;
+      // Top (+Y)
+      indices.push(a, c, d);
+      indices.push(a, d, b);
+      // Bottom (-Y)
+      const ba = layerVerts + a;
+      const bb = layerVerts + b;
+      const bc = layerVerts + c;
+      const bd = layerVerts + d;
+      indices.push(ba, bd, bc);
+      indices.push(ba, bb, bd);
+    }
+  }
+
+  // Front edge (iv = 0, -Z) & Back edge (iv = segV, +Z)
+  for (let iu = 0; iu < segU; iu++) {
+    const t0 = iu;
+    const t1 = iu + 1;
+    const b0 = layerVerts + t0;
+    const b1 = layerVerts + t1;
+    indices.push(t0, t1, b1);
+    indices.push(t0, b1, b0);
+
+    const rt0 = segV * cols + iu;
+    const rt1 = segV * cols + iu + 1;
+    const rb0 = layerVerts + rt0;
+    const rb1 = layerVerts + rt1;
+    indices.push(rt0, rb1, rt1);
+    indices.push(rt0, rb0, rb1);
+  }
+
+  // Left edge (iu = 0, -X) & Right edge (iu = segU, +X)
+  for (let iv = 0; iv < segV; iv++) {
+    const lt0 = iv * cols;
+    const lt1 = (iv + 1) * cols;
+    const lb0 = layerVerts + lt0;
+    const lb1 = layerVerts + lt1;
+    indices.push(lt0, lb1, lt1);
+    indices.push(lt0, lb0, lb1);
+
+    const rt0 = iv * cols + segU;
+    const rt1 = (iv + 1) * cols + segU;
+    const rb0 = layerVerts + rt0;
+    const rb1 = layerVerts + rt1;
+    indices.push(rt0, rt1, rb1);
+    indices.push(rt0, rb1, rb0);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}

@@ -15,6 +15,7 @@ export interface ProceduralTexturePack {
   featherPBR: PBRTextureSet;
   scalePBR: PBRTextureSet;
   woodPBR: PBRTextureSet;
+  batikPBR: PBRTextureSet;
   neonGrid: THREE.CanvasTexture;
   pylonTech: THREE.CanvasTexture;
   energyStream: THREE.CanvasTexture;
@@ -536,6 +537,85 @@ function createWoodPBRSet(): PBRTextureSet {
   };
 }
 
+function createBatikPBRSet(): PBRTextureSet {
+  const size = 256;
+  const [albedoC, aCtx] = makeCanvas(size, size);
+  const [heightC, hCtx] = makeCanvas(size, size);
+  const [roughC, rCtx] = makeCanvas(size, size);
+
+  // Neutral bright woven silk base so Aviator outfit colors tint richly
+  aCtx.fillStyle = '#ebebeb';
+  aCtx.fillRect(0, 0, size, size);
+  hCtx.fillStyle = '#7c7c7c';
+  hCtx.fillRect(0, 0, size, size);
+  rCtx.fillStyle = '#929292'; // Silk weave (~0.57)
+  rCtx.fillRect(0, 0, size, size);
+
+  // Fine cross-woven textile micro-texture
+  for (let i = 0; i < size; i += 2) {
+    aCtx.fillStyle = i % 4 === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+    aCtx.fillRect(0, i, size, 1);
+    aCtx.fillRect(i, 0, 1, size);
+    hCtx.fillStyle = i % 4 === 0 ? '#8a8a8a' : '#707070';
+    hCtx.fillRect(0, i, size, 1);
+  }
+
+  // Geometric Nusantara Kawung & Songket Diamond Brocade Grid
+  const cells = 4;
+  const step = size / cells;
+  for (let r = 0; r < cells; r++) {
+    for (let c = 0; c < cells; c++) {
+      const cx = (c + 0.5) * step;
+      const cy = (r + 0.5) * step;
+
+      // Subtle shaded diamond medallion
+      aCtx.fillStyle = 'rgba(255, 248, 220, 0.42)';
+      aCtx.beginPath();
+      aCtx.moveTo(cx, cy - step * 0.42);
+      aCtx.lineTo(cx + step * 0.42, cy);
+      aCtx.lineTo(cx, cy + step * 0.42);
+      aCtx.lineTo(cx - step * 0.42, cy);
+      aCtx.closePath();
+      aCtx.fill();
+
+      // Embossed Songket gold-thread border (appears as glossy raised weave)
+      aCtx.strokeStyle = 'rgba(40, 28, 12, 0.22)';
+      aCtx.lineWidth = 2;
+      aCtx.stroke();
+
+      hCtx.strokeStyle = '#d8d8d8';
+      hCtx.lineWidth = 3;
+      hCtx.stroke();
+
+      rCtx.strokeStyle = '#383838'; // Glossy brocade thread
+      rCtx.lineWidth = 3;
+      rCtx.stroke();
+
+      // 4 Kawung lotus petals inside each medallion
+      for (let k = 0; k < 4; k++) {
+        const ang = (k * Math.PI) / 2 + Math.PI / 4;
+        const px = cx + Math.cos(ang) * step * 0.17;
+        const py = cy + Math.sin(ang) * step * 0.17;
+        aCtx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        aCtx.beginPath();
+        aCtx.ellipse(px, py, step * 0.14, step * 0.075, ang, 0, Math.PI * 2);
+        aCtx.fill();
+
+        hCtx.fillStyle = '#bababa';
+        hCtx.beginPath();
+        hCtx.ellipse(px, py, step * 0.14, step * 0.075, ang, 0, Math.PI * 2);
+        hCtx.fill();
+      }
+    }
+  }
+
+  return {
+    map: toTexture(albedoC, { repeat: true, srgb: true }),
+    normalMap: heightCanvasToNormalTexture(heightC, 1.8, true),
+    roughnessMap: toTexture(roughC, { repeat: true, srgb: false })
+  };
+}
+
 function createHullPanelTexture(): THREE.CanvasTexture {
   const [c, ctx] = makeCanvas(512, 256);
   const grad = ctx.createLinearGradient(0, 0, 512, 256);
@@ -672,6 +752,9 @@ export function applyTextureAnisotropy(pack: ProceduralTexturePack, anisotropy: 
     pack.woodPBR.map,
     pack.woodPBR.normalMap,
     pack.woodPBR.roughnessMap,
+    pack.batikPBR.map,
+    pack.batikPBR.normalMap,
+    pack.batikPBR.roughnessMap,
     pack.energyStream
   ];
   if (pack.pylonPBR.emissiveMap) list.push(pack.pylonPBR.emissiveMap);
@@ -691,6 +774,7 @@ export function createProceduralTextures(): ProceduralTexturePack {
     featherPBR: createFeatherPBRSet(),
     scalePBR: createScalePBRSet(),
     woodPBR: createWoodPBRSet(),
+    batikPBR: createBatikPBRSet(),
     neonGrid: createNeonGridTexture(),
     pylonTech: pylonPBR.map,
     energyStream: createEnergyStreamTexture(),
