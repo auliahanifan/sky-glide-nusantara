@@ -1,14 +1,14 @@
 {
-  "name": "Sky Glide",
-  "short_name": "Sky Glide",
-  "description": "Soar through sunlit floating islands, chain golden boost rings, and upgrade your wooden-and-brass jetpack glider!",
+  "name": "SKY GLIDE // OVERDRIVE",
+  "short_name": "SKY GLIDE",
+  "description": "High-speed 3D neon aerial arcade: thread rings for Bullseye chains, graze hazards, trigger Overdrive Fever, and defeat Sector Bosses.",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
   "orientation": "landscape",
-  "theme_color": "#38bdf8",
-  "background_color": "#1e90ff",
-  "categories": ["games", "kids", "entertainment"],
+  "theme_color": "#070b18",
+  "background_color": "#040615",
+  "categories": ["games", "arcade", "action"],
   "icons": [
     {
       "src": "/icons/icon-192.svg",

@@ -7,12 +7,13 @@ import { UIManager } from './ui/UIManager';
 
 function bootstrap(): void {
   const canvas = document.getElementById('game-canvas') as HTMLCanvasElement | null;
+  const fxOverlay = document.getElementById('fx-overlay');
   const hudLayer = document.getElementById('hud-layer');
   const touchLayer = document.getElementById('touch-controls');
   const overlaysLayer = document.getElementById('ui-overlays');
   const rotateOverlay = document.getElementById('rotate-overlay');
 
-  if (!canvas || !hudLayer || !touchLayer || !overlaysLayer || !rotateOverlay) {
+  if (!canvas || !fxOverlay || !hudLayer || !touchLayer || !overlaysLayer || !rotateOverlay) {
     throw new Error('Required Sky Glide DOM containers are missing');
   }
 
@@ -25,12 +26,14 @@ function bootstrap(): void {
   let ui: UIManager | null = null;
   const engine = new SkyGlideEngine(canvas, input, sound, {
     onHudUpdate: (snap) => ui?.updateHud(snap),
-    onCallout: (text) => ui?.showCallout(text),
+    onCallout: (text, variant) => ui?.showCallout(text, variant),
+    onFxEvent: (fx) => ui?.triggerFx(fx),
     onStateChange: (state) => ui?.onStateChange(state),
-    onGameOver: (summary) => ui?.onGameOver(summary)
+    onGameOver: (summary) => ui?.onGameOver(summary),
+    onPerfUpdate: (perf) => ui?.updatePerf(perf)
   });
 
-  ui = new UIManager(hudLayer, overlaysLayer, rotateOverlay, engine, sound);
+  ui = new UIManager(hudLayer, fxOverlay, overlaysLayer, rotateOverlay, engine, sound);
 
   input.onPauseToggle = () => {
     if (engine.getState() === 'playing') {
