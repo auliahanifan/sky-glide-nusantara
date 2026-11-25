@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import './styles/main.css';
 import { SoundEngine } from './audio/SoundEngine';
 import { storage } from './data/storage';
@@ -47,7 +48,22 @@ function bootstrap(): void {
 
   if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+      if (import.meta.env.PROD) {
+        navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+      } else {
+        navigator.serviceWorker
+          .getRegistrations()
+          .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+          .catch(() => undefined);
+        if ('caches' in window) {
+          caches
+            .keys()
+            .then((keys) =>
+              Promise.all(keys.filter((k) => k.startsWith('sky-glide-')).map((k) => caches.delete(k)))
+            )
+            .catch(() => undefined);
+        }
+      }
     });
   }
 }

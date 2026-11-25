@@ -12,6 +12,9 @@ export interface ProceduralTexturePack {
   hullPBR: PBRTextureSet;
   pylonPBR: PBRTextureSet;
   minePBR: PBRTextureSet;
+  featherPBR: PBRTextureSet;
+  scalePBR: PBRTextureSet;
+  woodPBR: PBRTextureSet;
   neonGrid: THREE.CanvasTexture;
   pylonTech: THREE.CanvasTexture;
   energyStream: THREE.CanvasTexture;
@@ -348,6 +351,191 @@ function createMinePBRSet(): PBRTextureSet {
   };
 }
 
+function createFeatherPBRSet(): PBRTextureSet {
+  const size = 256;
+  const [albedoC, aCtx] = makeCanvas(size, size);
+  const [heightC, hCtx] = makeCanvas(size, size);
+  const [roughC, rCtx] = makeCanvas(size, size);
+
+  // Neutral bright base so material.color tints cleanly to gold, crimson, emerald, pearl, or obsidian
+  aCtx.fillStyle = '#efefef';
+  aCtx.fillRect(0, 0, size, size);
+  hCtx.fillStyle = '#808080';
+  hCtx.fillRect(0, 0, size, size);
+  rCtx.fillStyle = '#787878'; // Satin feather sheen (~0.47)
+  rCtx.fillRect(0, 0, size, size);
+
+  // Overlapping scalloped feather rows with central rachis & fine barb streaks
+  const rows = 6;
+  const cols = 4;
+  const cellW = size / cols;
+  const cellH = size / rows;
+
+  for (let r = -1; r <= rows; r++) {
+    const xOffset = (r % 2 === 0 ? 0 : cellW * 0.5);
+    for (let c = -1; c <= cols; c++) {
+      const cx = c * cellW + xOffset;
+      const cy = r * cellH;
+      const rad = cellW * 0.62;
+      const shade = 228 + Math.floor(hash2(c + 5, r + 9) * 24);
+
+      // Feather vane body
+      aCtx.fillStyle = `rgb(${shade}, ${shade}, ${shade})`;
+      aCtx.beginPath();
+      aCtx.arc(cx, cy, rad, 0, Math.PI);
+      aCtx.closePath();
+      aCtx.fill();
+
+      // Height mound per overlapping feather
+      const gradH = hCtx.createRadialGradient(cx, cy + rad * 0.25, 2, cx, cy + rad * 0.25, rad);
+      gradH.addColorStop(0, '#dcdcdc');
+      gradH.addColorStop(0.75, '#9a9a9a');
+      gradH.addColorStop(1, '#4a4a4a');
+      hCtx.fillStyle = gradH;
+      hCtx.beginPath();
+      hCtx.arc(cx, cy, rad, 0, Math.PI);
+      hCtx.closePath();
+      hCtx.fill();
+
+      // Subtle barb grooves radiating from shaft
+      aCtx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+      aCtx.lineWidth = 1;
+      for (let b = -3; b <= 3; b++) {
+        aCtx.beginPath();
+        aCtx.moveTo(cx, cy + 4);
+        aCtx.lineTo(cx + b * 8, cy + rad * 0.85);
+        aCtx.stroke();
+      }
+
+      // Central quill highlight
+      hCtx.strokeStyle = '#f2f2f2';
+      hCtx.lineWidth = 2;
+      hCtx.beginPath();
+      hCtx.moveTo(cx, cy);
+      hCtx.lineTo(cx, cy + rad * 0.9);
+      hCtx.stroke();
+
+      rCtx.fillStyle = '#626262';
+      rCtx.beginPath();
+      rCtx.arc(cx, cy, rad * 0.72, 0, Math.PI);
+      rCtx.fill();
+    }
+  }
+
+  return {
+    map: toTexture(albedoC, { repeat: true, srgb: true }),
+    normalMap: heightCanvasToNormalTexture(heightC, 2.0, true),
+    roughnessMap: toTexture(roughC, { repeat: true, srgb: false })
+  };
+}
+
+function createScalePBRSet(): PBRTextureSet {
+  const size = 256;
+  const [albedoC, aCtx] = makeCanvas(size, size);
+  const [heightC, hCtx] = makeCanvas(size, size);
+  const [roughC, rCtx] = makeCanvas(size, size);
+
+  aCtx.fillStyle = '#d8e4df';
+  aCtx.fillRect(0, 0, size, size);
+  hCtx.fillStyle = '#505050';
+  hCtx.fillRect(0, 0, size, size);
+  rCtx.fillStyle = '#565656'; // Glossy jewel-scale roughness (~0.34)
+  rCtx.fillRect(0, 0, size, size);
+
+  const rows = 8;
+  const cols = 6;
+  const cellW = size / cols;
+  const cellH = size / rows;
+
+  for (let r = -1; r <= rows; r++) {
+    const xOff = r % 2 === 0 ? 0 : cellW * 0.5;
+    for (let c = -1; c <= cols; c++) {
+      const cx = c * cellW + xOff;
+      const cy = r * cellH;
+      const rx = cellW * 0.56;
+      const ry = cellH * 0.88;
+
+      const tone = 212 + Math.floor(hash2(c * 3, r * 5) * 34);
+      aCtx.fillStyle = `rgb(${tone}, ${tone + 6}, ${tone + 2})`;
+      aCtx.beginPath();
+      aCtx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI);
+      aCtx.closePath();
+      aCtx.fill();
+      aCtx.strokeStyle = 'rgba(0, 0, 0, 0.22)';
+      aCtx.lineWidth = 2;
+      aCtx.stroke();
+
+      const hGrad = hCtx.createRadialGradient(cx, cy + ry * 0.2, 2, cx, cy + ry * 0.2, rx);
+      hGrad.addColorStop(0, '#ededed');
+      hGrad.addColorStop(0.7, '#9e9e9e');
+      hGrad.addColorStop(1, '#323232');
+      hCtx.fillStyle = hGrad;
+      hCtx.beginPath();
+      hCtx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI);
+      hCtx.closePath();
+      hCtx.fill();
+
+      // Glossy ridge vs matte crevice
+      rCtx.fillStyle = '#383838';
+      rCtx.beginPath();
+      rCtx.ellipse(cx, cy, rx * 0.72, ry * 0.72, 0, 0, Math.PI);
+      rCtx.fill();
+    }
+  }
+
+  return {
+    map: toTexture(albedoC, { repeat: true, srgb: true }),
+    normalMap: heightCanvasToNormalTexture(heightC, 2.5, true),
+    roughnessMap: toTexture(roughC, { repeat: true, srgb: false })
+  };
+}
+
+function createWoodPBRSet(): PBRTextureSet {
+  const size = 256;
+  const [albedoC, aCtx] = makeCanvas(size, size);
+  const [heightC, hCtx] = makeCanvas(size, size);
+  const [roughC, rCtx] = makeCanvas(size, size);
+
+  aCtx.fillStyle = '#e6d6c3';
+  aCtx.fillRect(0, 0, size, size);
+  hCtx.fillStyle = '#929292';
+  hCtx.fillRect(0, 0, size, size);
+  rCtx.fillStyle = '#888888'; // Warm satin varnished teak (~0.53)
+  rCtx.fillRect(0, 0, size, size);
+
+  const planks = 6;
+  const plankH = size / planks;
+  for (let p = 0; p < planks; p++) {
+    const y0 = p * plankH;
+    const base = 212 + Math.floor(hash2(p, 19) * 28);
+    aCtx.fillStyle = `rgb(${base}, ${Math.round(base * 0.92)}, ${Math.round(base * 0.82)})`;
+    aCtx.fillRect(0, y0, size, plankH - 2);
+
+    // Subtle longitudinal wood grain
+    for (let g = 0; g < 8; g++) {
+      const gy = y0 + 4 + ((g * 5.2) % (plankH - 6));
+      aCtx.fillStyle = g % 2 === 0 ? 'rgba(80, 45, 18, 0.1)' : 'rgba(255, 245, 230, 0.09)';
+      aCtx.fillRect(0, gy, size, 1.5);
+      hCtx.fillStyle = g % 2 === 0 ? '#7c7c7c' : '#a8a8a8';
+      hCtx.fillRect(0, gy, size, 1.5);
+    }
+
+    // Dark caulked plank seam
+    aCtx.fillStyle = 'rgba(38, 20, 8, 0.45)';
+    aCtx.fillRect(0, y0 + plankH - 2.5, size, 2.5);
+    hCtx.fillStyle = '#383838';
+    hCtx.fillRect(0, y0 + plankH - 2.5, size, 2.5);
+    rCtx.fillStyle = '#c8c8c8';
+    rCtx.fillRect(0, y0 + plankH - 2.5, size, 2.5);
+  }
+
+  return {
+    map: toTexture(albedoC, { repeat: true, srgb: true }),
+    normalMap: heightCanvasToNormalTexture(heightC, 1.9, true),
+    roughnessMap: toTexture(roughC, { repeat: true, srgb: false })
+  };
+}
+
 function createHullPanelTexture(): THREE.CanvasTexture {
   const [c, ctx] = makeCanvas(512, 256);
   const grad = ctx.createLinearGradient(0, 0, 512, 256);
@@ -475,6 +663,15 @@ export function applyTextureAnisotropy(pack: ProceduralTexturePack, anisotropy: 
     pack.minePBR.map,
     pack.minePBR.normalMap,
     pack.minePBR.roughnessMap,
+    pack.featherPBR.map,
+    pack.featherPBR.normalMap,
+    pack.featherPBR.roughnessMap,
+    pack.scalePBR.map,
+    pack.scalePBR.normalMap,
+    pack.scalePBR.roughnessMap,
+    pack.woodPBR.map,
+    pack.woodPBR.normalMap,
+    pack.woodPBR.roughnessMap,
     pack.energyStream
   ];
   if (pack.pylonPBR.emissiveMap) list.push(pack.pylonPBR.emissiveMap);
@@ -491,6 +688,9 @@ export function createProceduralTextures(): ProceduralTexturePack {
     hullPBR: createHullPBRSet(),
     pylonPBR,
     minePBR: createMinePBRSet(),
+    featherPBR: createFeatherPBRSet(),
+    scalePBR: createScalePBRSet(),
+    woodPBR: createWoodPBRSet(),
     neonGrid: createNeonGridTexture(),
     pylonTech: pylonPBR.map,
     energyStream: createEnergyStreamTexture(),
